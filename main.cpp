@@ -229,8 +229,6 @@ int main(int, char **) {
 			memcpy(pixels_copy, pixels, img_width * img_height * channels);
 			memcpy(pixels_primitive_resized, pixels, img_width * img_height * channels);
 
-			sprinkle_red(pixels_copy, img_width, img_height, channels);
-
 			// 2. upload image to gpu
 
 			// Upload pixels into texture
@@ -243,16 +241,15 @@ int main(int, char **) {
 			ImGui::Image((ImTextureID)(intptr_t)original_image_text_id, ImVec2(img_width, img_height));
 
 			// 4. add a simple imgui slider here to scale image from 0 to 100%
-			// if (ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f,
-			//                        100.0f)) {
-			// }
-			bool needs_recompute = true;
+			static float target_scale_perc = 100.0f;
+			bool needs_recompute = ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f, 100.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+
 			if (needs_recompute) {
 
-				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
-				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
-				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
-				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
+				for (int i = 0; i < (int)((100.0-target_scale_perc)/10); i++)
+				{
+					sprinkle_red(pixels_copy, img_width, img_height, channels);
+				}
 
 				// 5. Compute image energy
 				// auto orig_energy =  calculate_energy(pixels, img_w, img_h, img_chan);
