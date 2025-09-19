@@ -1,0 +1,61 @@
+
+# Build folders and files
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.ninja
+*.o
+*.obj
+*.so
+*.a
+*.lib
+*.dll
+*.exe
+*.out
+*.app
+*.i
+*.ii
+*.gch
+*.pch
+*.pdb
+*.idb
+*.class
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# vcpkg
+vcpkg_installed/
+vcpkg_buildtrees/
+vcpkg_downloads/
+vcpkg_packages/
+vcpkg_subbuild/
+
+# IDE files
+*.code-workspace
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Asset cache
+assets/*.cache
+
+# Ignore compiled ImGui config
+imgui.ini
+
+# Ignore generated files
+compile_commands.json
+
+# Ignore dependency folders
+_deps/
