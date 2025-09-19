@@ -29,6 +29,26 @@ unsigned char *load_image(const std::string &path, int &width, int &height,
 	return pixels;
 }
 
+// load image and format
+unsigned char *load_image_and_format(const std::string &path, int &width, int &height,
+													int &channels, GLenum &format)
+{
+
+	unsigned char *pixels =	load_image(path, /*out*/ width, /*out*/ height, /*out*/ channels);
+	if (!pixels) {
+		spdlog::error("Failed to load image: {}", path.c_str());
+	}
+
+	// Compute the format based on number of channels
+	if (channels != 3 && channels != 4) {
+		spdlog::error("Image is not 3 or 4 channels: {}", path.c_str());
+		stbi_image_free(pixels); // if you're using stb_image
+		return nullptr;
+	}
+	format = channels == 4 ? GL_RGBA : GL_RGB;
+	return pixels;
+}
+
 void sprinkle_red(unsigned char* pixels, int width, int height, int channels)
 {
     if (!pixels) return;
@@ -133,7 +153,23 @@ int main(int, char **) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	// Create a OpenGL texture identifier
+	GLuint seam_carved_image_id;
+	glGenTextures(1, &seam_carved_image_id);
+	glBindTexture(GL_TEXTURE_2D, seam_carved_image_id);
 
+	// Setup filtering parameters for display
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Create a OpenGL texture identifier
+	GLuint primitive_resized_image_id;
+	glGenTextures(1, &primitive_resized_image_id);
+	glBindTexture(GL_TEXTURE_2D, primitive_resized_image_id);
+
+	// Setup filtering parameters for display
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	// Main loop
 	while (!glfwWindowShouldClose(window)) {
@@ -180,44 +216,26 @@ int main(int, char **) {
 			const std::string img_path = ASSET_PATH "/schmetterling_mid.jpg";
 
 			// 1. load image
-			int img_width = 0, img_height = 0, img_channels = 0;
-			unsigned char *pixels =  load_image(img_path, /*out*/ img_width, /*out*/ img_height,
-									/*out*/ img_channels);
-						
+			int img_width = 0, img_height = 0, channels = 0;
+			GLenum GL_format;
+			unsigned char *pixels =  load_image_and_format(img_path, /*out*/ img_width, /*out*/ img_height,
+									/*out*/ channels, /*out*/ GL_format);
+
 			if (!pixels) {
 				return 1;
 			}
+			unsigned char *pixels_copy = new unsigned char[img_width * img_height * channels];
+			unsigned char *pixels_primitive_resized = new unsigned char[img_width * img_height * channels];
+			memcpy(pixels_copy, pixels, img_width * img_height * channels);
+			memcpy(pixels_primitive_resized, pixels, img_width * img_height * channels);
 
-			sprinkle_red(pixels, img_width, img_height, img_channels);
+			sprinkle_red(pixels_copy, img_width, img_height, channels);
 
-			// Determine format based on number of channels
-			GLint internalFormat;
-			GLenum format;
-
-			switch (img_channels) {
-				case 1:
-					internalFormat = GL_RED;
-					format = GL_RED;
-					break;
-				case 3:
-					internalFormat = GL_RGB;
-					format = GL_RGB;
-					break;
-				case 4:
-					internalFormat = GL_RGBA;
-					format = GL_RGBA;
-					break;
-				default:
-					spdlog::error("Failed to initialize GLAD");
-					stbi_image_free(pixels); // if you're using stb_image
-					return 1;
-			}
 			// 2. upload image to gpu
 
-			// Upload pixels into texture			
-			glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, img_width, img_height, 0, format, GL_UNSIGNED_BYTE, pixels);
-
-			stbi_image_free(pixels); // free image memory
+			// Upload pixels into texture
+			glBindTexture(GL_TEXTURE_2D, original_image_text_id);	
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_format, img_width, img_height, 0, GL_format, GL_UNSIGNED_BYTE, pixels);
 
 			// 3. display image
 			// (https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples)
@@ -228,8 +246,14 @@ int main(int, char **) {
 			// if (ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f,
 			//                        100.0f)) {
 			// }
-			bool needs_recompute = false;
+			bool needs_recompute = true;
 			if (needs_recompute) {
+
+				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
+				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
+				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
+				sprinkle_red(pixels_primitive_resized, img_width, img_height, channels);
+
 				// 5. Compute image energy
 				// auto orig_energy =  calculate_energy(pixels, img_w, img_h, img_chan);
 				// 6. find low energy seams
@@ -241,15 +265,32 @@ int main(int, char **) {
 				// (horizontal only)
 			}
 
+			// Display seam carved image (for now just display original image)
+			// Upload pixels into texture
+			glBindTexture(GL_TEXTURE_2D, seam_carved_image_id);	
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_format, img_width, img_height, 0, GL_format, GL_UNSIGNED_BYTE, pixels_copy);
+
 			ImGui::Text("Processed (Seam Carved)");
-			// ImGui::Image((ImTextureID)(intptr_t)image_processed_tex_id,
-			//              ImVec2(working_width, img_h));
+			ImGui::Image((ImTextureID)(intptr_t)seam_carved_image_id,
+			             ImVec2(img_width, img_height));
+
+			// 9. Display resized image (for now just display original image)
+			// ImGui::Text("Resized");
+			glBindTexture(GL_TEXTURE_2D, primitive_resized_image_id);	
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_format, img_width, img_height, 0, GL_format, GL_UNSIGNED_BYTE, pixels_primitive_resized);
+
 
 			ImGui::Text("Primitive Resized");
-			// ImGui::Image((ImTextureID)(intptr_t)primitive_tex_id,
-			//              ImVec2(target_scale, img_h));
+			ImGui::Image((ImTextureID)(intptr_t)primitive_resized_image_id,
+			             ImVec2(img_width, img_height));
 
 			ImGui::End();
+
+			// Free all allocated memory
+			stbi_image_free(pixels); // free image memory
+			delete[] pixels_copy; // free image memory
+			delete[] pixels_primitive_resized; // free image memory
+
 		}
 
 		// Rendering
