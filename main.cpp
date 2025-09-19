@@ -12,6 +12,7 @@
 #include <stb_image.h>
 
 #include <string>
+#include <random>
 
 static void glfw_error_callback(int error, const char *description) {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -26,6 +27,26 @@ unsigned char *load_image(const std::string &path, int &width, int &height,
 		spdlog::error("Failed to load image: {}", path.c_str());
 	}
 	return pixels;
+}
+
+void sprinkle_red(unsigned char* pixels, int width, int height, int channels)
+{
+    if (!pixels) return;
+
+    int total_pixels = width * height;
+    int count_to_change = total_pixels / 10;
+
+    static std::mt19937 rng(std::random_device{}()); // good seed once
+    std::uniform_int_distribution<int> dist(0, total_pixels - 1);
+
+    for (int i = 0; i < count_to_change; i++) {
+        int idx = dist(rng);
+        int offset = idx * channels;
+
+        pixels[offset + 0] = 255; // R
+        if (channels > 1) pixels[offset + 1] = 0;   // G
+        if (channels > 2) pixels[offset + 2] = 0;   // B
+    }
 }
 
 int main(int, char **) {
@@ -98,6 +119,22 @@ int main(int, char **) {
 
 	ImVec4 clear_color = ImVec4(0.168f, 0.394f, 0.534f, 1.00f);
 
+
+
+
+
+
+	// Create a OpenGL texture identifier
+	GLuint original_image_text_id;
+	glGenTextures(1, &original_image_text_id);
+	glBindTexture(GL_TEXTURE_2D, original_image_text_id);
+
+	// Setup filtering parameters for display
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+
+
 	// Main loop
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -139,15 +176,53 @@ int main(int, char **) {
 		{
 			ImGui::Begin("Image Window");
 			// ----- START HERE -----
+			// 1. load image from disk
 			const std::string img_path = ASSET_PATH "/schmetterling_mid.jpg";
 
 			// 1. load image
+			int img_width = 0, img_height = 0, img_channels = 0;
+			unsigned char *pixels =  load_image(img_path, /*out*/ img_width, /*out*/ img_height,
+									/*out*/ img_channels);
+						
+			if (!pixels) {
+				return 1;
+			}
+
+			sprinkle_red(pixels, img_width, img_height, img_channels);
+
+			// Determine format based on number of channels
+			GLint internalFormat;
+			GLenum format;
+
+			switch (img_channels) {
+				case 1:
+					internalFormat = GL_RED;
+					format = GL_RED;
+					break;
+				case 3:
+					internalFormat = GL_RGB;
+					format = GL_RGB;
+					break;
+				case 4:
+					internalFormat = GL_RGBA;
+					format = GL_RGBA;
+					break;
+				default:
+					spdlog::error("Failed to initialize GLAD");
+					stbi_image_free(pixels); // if you're using stb_image
+					return 1;
+			}
 			// 2. upload image to gpu
+
+			// Upload pixels into texture			
+			glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, img_width, img_height, 0, format, GL_UNSIGNED_BYTE, pixels);
+
+			stbi_image_free(pixels); // free image memory
+
 			// 3. display image
 			// (https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples)
 			ImGui::Text("Original");
-			// ImGui::Image((ImTextureID)(intptr_t)image1_tex_id, ImVec2(img_w,
-			// img_h));
+			ImGui::Image((ImTextureID)(intptr_t)original_image_text_id, ImVec2(img_width, img_height));
 
 			// 4. add a simple imgui slider here to scale image from 0 to 100%
 			// if (ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f,
@@ -203,6 +278,7 @@ int main(int, char **) {
 	}
 
 	// Cleanup
+	// TODO glDeleteTextures(1, &image1_tex_id);
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
