@@ -110,8 +110,45 @@ TEST(CustomImageFilterTest, SobelX) {
 }
 
 
+std::vector<unsigned char> energyMap_img5x5 = {
+    12,  85, 173,  44, 201,
+   190,  33,  67, 142,  58,
+    99, 255, 120,  11,  76,
+   210, 134,  88,  39, 178,
+    55, 199,  24,  61, 144
+};
+
+std::vector<unsigned int> min_path_energy_map_img5x5 = {
+    12,  85, 173,  44, 201,
+   202,  45,  111, 186,  102,
+    144, 300, 165,  113,  178,
+   354, 278,  201,  152, 291,
+    333, 400,  176,  213, 296
+};
 
 // Test low_energy_seam (not implemented yet)
-// test dynamic programming table creation
+// creation of the minimal seam energy map
+TEST(CustomImageFilterTest, MinimalSeamEnergyMap) {
+
+    // init input image (5x5) with horizontal edge
+    ImageData input(5, 5, 1);
+    input.setPixels(energyMap_img5x5.data(), energyMap_img5x5.size());
+    
+    // Apply minimal energy path map calculation
+    std::vector<unsigned int> output = CustomImageFilter::computeMinimalEnergyPathMap(input);
+
+    for (size_t i = 0; i < output.size(); ++i) {
+        printf("%u ", output[i]);
+        if ((i + 1) % input.getWidth() == 0) printf("\n");
+    }
+    
+    // Check that output matches truth
+    auto truth_it = min_path_energy_map_img5x5.begin();
+    auto output_it = output.begin();
+    for (; truth_it != min_path_energy_map_img5x5.end() && output_it != output.end(); ++truth_it, ++output_it) {
+        EXPECT_EQ(*truth_it, *output_it);
+    }
+
+}
 // test seam backtracking
 // test seam removal

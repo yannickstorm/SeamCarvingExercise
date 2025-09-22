@@ -8,4 +8,6 @@ public:
     static void sobelY(const ImageData& input, ImageData& output);
     static void toGreyscale(const ImageData& input, ImageData& output);
     static void sobel(const ImageData& input, ImageData& output);
+    static std::vector<unsigned int> computeMinimalEnergyPathMap(ImageData& energyMap);
+
 };

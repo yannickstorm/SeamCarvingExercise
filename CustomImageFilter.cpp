@@ -110,3 +110,38 @@ void CustomImageFilter::sobel(const ImageData& input, ImageData& output) {
         output.pixels[i] = static_cast<unsigned char>(std::clamp(magnitude, 0, 255));
     }
 }
+
+// Compute the minimal energy path map using dynamic programming
+std::vector<unsigned int> CustomImageFilter::computeMinimalEnergyPathMap(ImageData& energyMap) {
+    // Create a 2D vector to store the cumulative energy values
+    std::vector<unsigned int> minimalEnergyPathMap(energyMap.getWidth() * energyMap.getHeight());
+
+    // Copy first row of energy map to cumulative energy map
+    for (unsigned int x = 0; x < energyMap.getWidth(); ++x) {
+        minimalEnergyPathMap[x] = static_cast<unsigned int>(energyMap.pixels[x]);
+    }
+
+    // Fill in the cumulative energy map
+    for (int y = 1; y < energyMap.getHeight(); ++y) {
+        for (int x = 0; x < energyMap.getWidth(); ++x) {
+
+            unsigned int idx = y * energyMap.getWidth() + x;
+            unsigned int above = (y - 1) * energyMap.getWidth() + x;
+
+            std::vector<unsigned int> candidates = {};
+            candidates.push_back(minimalEnergyPathMap[above]); // directly above
+
+            if((x - 1) >= 0) candidates.push_back(minimalEnergyPathMap[above - 1]);
+            if((x + 1) < energyMap.getWidth()) candidates.push_back(minimalEnergyPathMap[above + 1]);
+
+            // Find the minimum cumulative energy from the three possible pixels above
+            unsigned int minEnergy = *std::min_element(candidates.begin(), candidates.end());
+
+            // Update the cumulative energy for the current pixel
+            minimalEnergyPathMap[idx] = static_cast<unsigned int>(energyMap.pixels[idx]) + minEnergy;
+        }
+    }
+
+    return minimalEnergyPathMap;
+}
+
