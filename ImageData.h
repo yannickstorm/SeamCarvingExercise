@@ -36,5 +36,6 @@ public:
     }
 
     unsigned char* getPixelData() { return pixels.data(); }
+    size_t getPixelCount() const { return pixels.size(); }
     bool valid() const { return !pixels.empty(); }
 };

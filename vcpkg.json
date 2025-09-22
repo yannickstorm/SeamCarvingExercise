@@ -31,6 +31,9 @@
         "glfw-binding",
         "opengl3-binding"
       ]
+    },
+    {
+      "name": "gtest"
     }
   ]
 }

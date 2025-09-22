@@ -38,3 +38,18 @@ target_link_libraries(Flink-Home PRIVATE ${libraries})
 # encode asset path
 target_compile_definitions(Flink-Home PRIVATE ASSET_PATH="${CMAKE_SOURCE_DIR}/assets")
 target_compile_definitions(Flink-Home PRIVATE FMT_HEADER_ONLY)
+
+
+# GoogleTest (gtest) integration
+find_package(GTest CONFIG REQUIRED)
+enable_testing()
+
+# Add test executable for CustomImageFilter
+add_executable(test_CustomImageFilter
+	${CMAKE_SOURCE_DIR}/test_CustomImageFilter.cpp
+)
+
+target_link_libraries(test_CustomImageFilter PRIVATE GTest::gtest GTest::gtest_main)
+set_target_properties(test_CustomImageFilter PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
+
+add_test(NAME CustomImageFilterTest COMMAND ${CMAKE_BINARY_DIR}/gtests/test_CustomImageFilter)
