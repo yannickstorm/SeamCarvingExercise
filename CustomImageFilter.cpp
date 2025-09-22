@@ -145,3 +145,52 @@ std::vector<unsigned int> CustomImageFilter::computeMinimalEnergyPathMap(ImageDa
     return minimalEnergyPathMap;
 }
 
+std::vector<unsigned int> CustomImageFilter::identityMinEnergySeam(const std::vector<unsigned int>& minPathEnergyMap, unsigned int imageWidth, unsigned int imageHeight) {
+    // Placeholder for dynamic programming seam calculation implementation
+
+    // Step 3: Remove the seam from the image
+    std::vector<unsigned int> carvedPixels;
+
+    // Find the starting point of the minimal energy seam in the last row
+    auto lastRowStart = minPathEnergyMap.end() - imageWidth;
+    printf("Last row energies: %u\n", *lastRowStart);
+    auto minIt = std::min_element(lastRowStart, minPathEnergyMap.end());
+    int seamPosX = std::distance(lastRowStart, minIt);
+    
+    int currRow = imageHeight - 1;
+    carvedPixels.push_back(currRow * imageWidth + seamPosX);
+
+    // Follow the seam upwards and store the pixels to be removed
+    while(currRow - 1 >= 0) {
+        // Mark pixel at (seamX, row) for removal
+        // Move to the next row
+        unsigned int pixelAbove = (currRow-1) * imageWidth + seamPosX;
+
+        // Determine the next seam position
+        std::vector<std::pair<int, unsigned int>> candidates; // pair of (x offset, energy)
+        
+        unsigned int minNextEnergyPath = minPathEnergyMap[pixelAbove]; // directly above
+        char minNextIndex = 0;
+        
+        if((seamPosX - 1) >= 0){
+            if(minPathEnergyMap[pixelAbove - 1] < minNextEnergyPath) {
+                minNextEnergyPath = minPathEnergyMap[pixelAbove - 1];
+                minNextIndex = -1;
+            }
+        }
+        if((seamPosX + 1) < imageWidth){
+            if(minPathEnergyMap[pixelAbove + 1] < minNextEnergyPath) {
+                minNextEnergyPath = minPathEnergyMap[pixelAbove + 1];
+                minNextIndex = 1;
+            }
+        }
+
+        // Update seamX to the position of the next pixel in the seam
+        seamPosX += minNextIndex;
+        carvedPixels.push_back((currRow - 1) * imageWidth + seamPosX);
+        currRow--;
+    }
+
+    return carvedPixels;
+}
+

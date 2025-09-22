@@ -10,4 +10,6 @@ public:
     static void sobel(const ImageData& input, ImageData& output);
     static std::vector<unsigned int> computeMinimalEnergyPathMap(ImageData& energyMap);
 
+    static std::vector<unsigned int> identityMinEnergySeam(const std::vector<unsigned int>& minPathEnergyMap, unsigned int imageWidth, unsigned int imageHeight);
+
 };

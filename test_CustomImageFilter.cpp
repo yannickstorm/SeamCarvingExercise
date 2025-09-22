@@ -126,15 +126,15 @@ std::vector<unsigned int> min_path_energy_map_img5x5 = {
     333, 400,  176,  213, 296
 };
 
-// Test low_energy_seam (not implemented yet)
+// Test low_energy_seam
 // creation of the minimal seam energy map
 TEST(CustomImageFilterTest, MinimalSeamEnergyMap) {
 
-    // init input image (5x5) with horizontal edge
+    // init input image (5x5)
     ImageData input(5, 5, 1);
     input.setPixels(energyMap_img5x5.data(), energyMap_img5x5.size());
     
-    // Apply minimal energy path map calculation
+    // Compute minimal energy path map
     std::vector<unsigned int> output = CustomImageFilter::computeMinimalEnergyPathMap(input);
 
     for (size_t i = 0; i < output.size(); ++i) {
@@ -150,5 +150,44 @@ TEST(CustomImageFilterTest, MinimalSeamEnergyMap) {
     }
 
 }
+
+std::vector<unsigned int> expected_seam_img5x5 = {
+    22, // Row 0, Col 2
+    18, // Row 1, Col 1
+    13, // Row 2, Col 2
+    9, // Row 3, Col 2
+    3  // Row 4, Col 2
+};
+
 // test seam backtracking
+// Test low_energy_seam (not implemented yet)
+// creation of the minimal seam energy map
+TEST(CustomImageFilterTest, SeamDetection) {
+
+    // init input image (5x5)
+    ImageData input(5, 5, 1);
+    input.setPixels(energyMap_img5x5.data(), energyMap_img5x5.size());
+
+    // Apply minimal energy path map calculation
+    std::vector<unsigned int> min_path_energy_map_img5x5 = CustomImageFilter::computeMinimalEnergyPathMap(input);
+
+    // Backtrack the minimal energy seam from the last row
+    std::vector<unsigned int> seam(input.getHeight());
+
+    seam = CustomImageFilter::identityMinEnergySeam(min_path_energy_map_img5x5, input.getWidth(), input.getHeight());
+
+    printf("Seam indices (x-coordinates per row):\n");
+    for (size_t y = 0; y < seam.size(); ++y) {
+        printf("Row %u: Column %u\n",  input.getHeight() - 1 - y, seam[y] % input.getWidth());
+    }
+
+    // Check that output matches truth
+    auto truth_it = expected_seam_img5x5.begin();
+    auto output_it = seam.begin();
+    for (; truth_it != expected_seam_img5x5.end() && output_it != seam.end(); ++truth_it, ++output_it) {
+        EXPECT_EQ(*truth_it, *output_it);
+    }
+    
+}
+
 // test seam removal
