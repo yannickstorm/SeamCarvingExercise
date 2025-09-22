@@ -26,7 +26,9 @@ find_package(fmt CONFIG REQUIRED)
 set(libraries ${libraries} fmt::fmt)
 
 ## Create main executable
-add_executable(Flink-Home ${CMAKE_SOURCE_DIR}/main.cpp)
+add_executable(Flink-Home
+				${CMAKE_SOURCE_DIR}/main.cpp
+				${CMAKE_SOURCE_DIR}/CustomImageFilter.cpp)
 
 target_include_directories(
 	Flink-Home
@@ -47,9 +49,11 @@ enable_testing()
 # Add test executable for CustomImageFilter
 add_executable(test_CustomImageFilter
 	${CMAKE_SOURCE_DIR}/test_CustomImageFilter.cpp
+	${CMAKE_SOURCE_DIR}/CustomImageFilter.cpp
 )
 
 target_link_libraries(test_CustomImageFilter PRIVATE GTest::gtest GTest::gtest_main)
+target_link_libraries(test_CustomImageFilter PRIVATE ${libraries})
 set_target_properties(test_CustomImageFilter PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
 
 add_test(NAME CustomImageFilterTest COMMAND ${CMAKE_BINARY_DIR}/gtests/test_CustomImageFilter)

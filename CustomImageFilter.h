@@ -1,0 +1,11 @@
+#pragma once
+#include "ImageData.h"
+
+class CustomImageFilter {
+public:
+    // Applies a custom filter to the input image and stores the result in output
+    static void sobelX(const ImageData& input, ImageData& output);
+    static void sobelY(const ImageData& input, ImageData& output);
+    static void toGreyscale(const ImageData& input, ImageData& output);
+    static void sobel(const ImageData& input, ImageData& output);
+};

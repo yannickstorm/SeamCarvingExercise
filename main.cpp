@@ -15,6 +15,7 @@
 #include <random>
 
 #include "ImageData.h"
+#include "CustomImageFilter.h"
 
 static void glfw_error_callback(int error, const char *description) {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -33,7 +34,7 @@ unsigned char *load_image(const std::string &path, int &width, int &height,
 
 // load image and format
 unsigned char *load_image_and_format(const std::string &path, int &width, int &height,
-													int &channels, GLenum &format)
+													int &channels)
 {
 
 	unsigned char *pixels =	load_image(path, /*out*/ width, /*out*/ height, /*out*/ channels);
@@ -47,8 +48,17 @@ unsigned char *load_image_and_format(const std::string &path, int &width, int &h
 		stbi_image_free(pixels); // if you're using stb_image
 		return nullptr;
 	}
-	format = channels == 4 ? GL_RGBA : GL_RGB;
 	return pixels;
+}
+
+GLenum get_format_from_channels(int channels) {
+	if (channels == 1) return GL_RED;
+	if (channels == 2) return GL_RG;
+	if (channels == 3) return GL_RGB;
+	if (channels == 4) return GL_RGBA;
+
+	spdlog::error("Unsupported number of channels: {}", channels);
+	return 0; // Invalid format
 }
 
 void sprinkle_red(ImageData &img)
@@ -182,17 +192,16 @@ int main(int, char **) {
 
 	// 1. load image
 	int img_width = 0, img_height = 0, channels = 0;
-	GLenum GL_format;
 
 
 	unsigned char *pixels =  load_image_and_format(img_path, /*out*/ img_width, /*out*/ img_height,
-		/*out*/ channels, /*out*/ GL_format);
+		/*out*/ channels);
 	if (!pixels) {
 		return 1;
 	}
 
 	// Initialize based image
-	ImageData base_image(img_width, img_height, channels, GL_format);
+	ImageData base_image(img_width, img_height, channels);
 	// Copy pixel data into ImageData
 	base_image.setPixels(pixels, img_width * img_height * channels);
 	// Free all allocated memory
@@ -203,7 +212,7 @@ int main(int, char **) {
 	ImageData primitive_resized_image = base_image; // for now just copy original
 
 	// Initialize seam carved image
-	ImageData seam_carved_image; // empty for now
+	ImageData seam_carved_image = base_image; // for now just copy original
 
 	// Main loop
 	while (!glfwWindowShouldClose(window)) {
@@ -249,7 +258,7 @@ int main(int, char **) {
 
 			// Upload pixels into texture
 			glBindTexture(GL_TEXTURE_2D, original_image_text_id);
-			glTexImage2D(GL_TEXTURE_2D, 0, base_image.getFormat(), base_image.getWidth(), base_image.getHeight(), 0, base_image.getFormat(), GL_UNSIGNED_BYTE, base_image.getPixelData());
+			glTexImage2D(GL_TEXTURE_2D, 0, get_format_from_channels(base_image.getChannels()), base_image.getWidth(), base_image.getHeight(), 0, get_format_from_channels(base_image.getChannels()), GL_UNSIGNED_BYTE, base_image.getPixelData());
 
 			// 3. display image
 			// (https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples)
@@ -264,10 +273,20 @@ int main(int, char **) {
 
 				seam_carved_image = base_image; // reset image to original
 
-				for (int i = 0; i < (int)((100.0-target_scale_perc)/10); i++)
-				{
-					sprinkle_red(seam_carved_image);
-				}
+				ImageData greyscale = base_image;
+				// Convert to greyscale first
+				CustomImageFilter::toGreyscale(base_image, greyscale);
+				// Apply edge detection with sobel
+				CustomImageFilter::sobel(greyscale, seam_carved_image);
+
+				ImageData sobelY_result = greyscale;
+				CustomImageFilter::sobelY(greyscale, sobelY_result);
+				primitive_resized_image = sobelY_result;
+
+				// for (int i = 0; i < (int)((100.0-target_scale_perc)/10); i++)
+				// {
+				// 	sprinkle_red(seam_carved_image);
+				// }
 
 				// 5. Compute image energy
 				// auto orig_energy =  calculate_energy(pixels, img_w, img_h, img_chan);
@@ -283,7 +302,14 @@ int main(int, char **) {
 			// Display seam carved image (for now just display original image)
 			// Upload pixels into texture
 			glBindTexture(GL_TEXTURE_2D, seam_carved_image_id);
-			glTexImage2D(GL_TEXTURE_2D, 0, seam_carved_image.getFormat(), seam_carved_image.getWidth(), seam_carved_image.getHeight(), 0, seam_carved_image.getFormat(), GL_UNSIGNED_BYTE, seam_carved_image.getPixelData());
+			glTexImage2D(GL_TEXTURE_2D, 0,
+							get_format_from_channels(seam_carved_image.getChannels()),
+							seam_carved_image.getWidth(),
+							seam_carved_image.getHeight(),
+							0,
+							get_format_from_channels(seam_carved_image.getChannels()),
+							GL_UNSIGNED_BYTE,
+							seam_carved_image.getPixelData());
 
 			ImGui::Text("Processed (Seam Carved)");
 			ImGui::Image((ImTextureID)(intptr_t)seam_carved_image_id,
@@ -292,7 +318,7 @@ int main(int, char **) {
 			// 9. Display resized image (for now just display original image)
 			// ImGui::Text("Resized");
 			glBindTexture(GL_TEXTURE_2D, primitive_resized_image_id);
-			glTexImage2D(GL_TEXTURE_2D, 0, primitive_resized_image.getFormat(), primitive_resized_image.getWidth(), primitive_resized_image.getHeight(), 0, primitive_resized_image.getFormat(), GL_UNSIGNED_BYTE, primitive_resized_image.getPixelData());
+			glTexImage2D(GL_TEXTURE_2D, 0, get_format_from_channels(primitive_resized_image.getChannels()), primitive_resized_image.getWidth(), primitive_resized_image.getHeight(), 0, get_format_from_channels(primitive_resized_image.getChannels()), GL_UNSIGNED_BYTE, primitive_resized_image.getPixelData());
 
 
 			ImGui::Text("Primitive Resized");
