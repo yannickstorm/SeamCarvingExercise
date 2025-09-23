@@ -149,16 +149,16 @@ std::vector<unsigned int> CustomImageFilter::identityMinEnergySeam(const std::ve
     // Placeholder for dynamic programming seam calculation implementation
 
     // Step 3: Remove the seam from the image
-    std::vector<unsigned int> carvedPixels;
+    std::vector<unsigned int> seamPixelIndices;
 
     // Find the starting point of the minimal energy seam in the last row
     auto lastRowStart = minPathEnergyMap.end() - imageWidth;
     printf("Last row energies: %u\n", *lastRowStart);
     auto minIt = std::min_element(lastRowStart, minPathEnergyMap.end());
     int seamPosX = std::distance(lastRowStart, minIt);
-    
+
     int currRow = imageHeight - 1;
-    carvedPixels.push_back(currRow * imageWidth + seamPosX);
+    seamPixelIndices.push_back(currRow * imageWidth + seamPosX);
 
     // Follow the seam upwards and store the pixels to be removed
     while(currRow - 1 >= 0) {
@@ -187,10 +187,29 @@ std::vector<unsigned int> CustomImageFilter::identityMinEnergySeam(const std::ve
 
         // Update seamX to the position of the next pixel in the seam
         seamPosX += minNextIndex;
-        carvedPixels.push_back((currRow - 1) * imageWidth + seamPosX);
+        seamPixelIndices.push_back((currRow - 1) * imageWidth + seamPosX);
         currRow--;
     }
 
-    return carvedPixels;
+    return seamPixelIndices;
 }
 
+void CustomImageFilter::removeSeam(ImageData& image, const std::vector<unsigned int>& seam) {
+
+    for(auto pixelIndex : seam) {
+        image.pixels.erase(image.pixels.begin() + pixelIndex * image.getChannels(), image.pixels.begin() + (pixelIndex + 1) * image.getChannels());
+    }
+
+    image.setWidth(image.getWidth() - 1);
+}
+
+
+void CustomImageFilter::paintSeam(ImageData& image, const std::vector<unsigned int>& seam) {
+
+    for(auto pixelIndex : seam) {
+        image.pixels[pixelIndex * image.getChannels()] = 255;     // R
+        image.pixels[pixelIndex * image.getChannels() + 1] = 0;   // G
+        image.pixels[pixelIndex * image.getChannels() + 2] = 0;   // B
+    }
+
+}

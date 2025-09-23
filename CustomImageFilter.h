@@ -12,4 +12,6 @@ public:
 
     static std::vector<unsigned int> identityMinEnergySeam(const std::vector<unsigned int>& minPathEnergyMap, unsigned int imageWidth, unsigned int imageHeight);
 
+    static void removeSeam(ImageData& image, const std::vector<unsigned int>& seam);
+    static void paintSeam(ImageData& image, const std::vector<unsigned int>& seam);
 };

@@ -151,7 +151,7 @@ TEST(CustomImageFilterTest, MinimalSeamEnergyMap) {
 
 }
 
-std::vector<unsigned int> expected_seam_img5x5 = {
+const std::vector<unsigned int> expected_seam_img5x5 = {
     22, // Row 0, Col 2
     18, // Row 1, Col 1
     13, // Row 2, Col 2
@@ -178,7 +178,7 @@ TEST(CustomImageFilterTest, SeamDetection) {
 
     printf("Seam indices (x-coordinates per row):\n");
     for (size_t y = 0; y < seam.size(); ++y) {
-        printf("Row %u: Column %u\n",  input.getHeight() - 1 - y, seam[y] % input.getWidth());
+        printf("Row %lu: Column %u\n",  input.getHeight() - 1 - y, seam[y] % input.getWidth());
     }
 
     // Check that output matches truth
@@ -190,4 +190,31 @@ TEST(CustomImageFilterTest, SeamDetection) {
     
 }
 
+std::vector<unsigned char> image_seam_removed = {
+    12,  85, 173, 201,
+   190,  33,  67, 142,
+    99, 255, 120,  76,
+   210, 134,  88, 178,
+    55, 199,  61, 144
+};
+
 // test seam removal
+TEST(CustomImageFilterTest, SeamRemoval) {
+
+    // init input image (5x5)
+    ImageData input(5, 5, 1);
+    input.setPixels(energyMap_img5x5.data(), energyMap_img5x5.size());
+
+    // Apply the seam removal
+    CustomImageFilter::removeSeam(input, expected_seam_img5x5);
+    
+    input.printPixels();
+
+    // Check that output matches truth
+    auto truth_it = image_seam_removed.begin();
+    auto output_it = input.pixels.begin();
+    for (; truth_it != image_seam_removed.end() && output_it != input.pixels.end(); ++truth_it, ++output_it) {
+        EXPECT_EQ(*truth_it, *output_it);
+    }
+    
+}
