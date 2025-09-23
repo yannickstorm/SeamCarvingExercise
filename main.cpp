@@ -176,6 +176,10 @@ int main(int, char **) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	// Set alignment to 1 byte (for width not multiple of 4). Prevents jumbling
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+
 	// Create a OpenGL texture identifier
 	GLuint primitive_resized_image_id;
 	glGenTextures(1, &primitive_resized_image_id);
