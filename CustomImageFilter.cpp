@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <spdlog/spdlog.h>
 
+
 // Sobel Gx (detects vertical edges)
 std::vector<int> sobelGx = {
     -1, 0, 1,
@@ -211,3 +212,5 @@ void CustomImageFilter::paintSeam(ImageData& image, const std::vector<unsigned i
     }
 
 }
+
+

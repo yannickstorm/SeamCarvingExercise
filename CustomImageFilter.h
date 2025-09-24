@@ -1,5 +1,7 @@
 #pragma once
 #include "ImageData.h"
+#include <glad/glad.h>
+#include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
 class CustomImageFilter {
 public:
@@ -14,4 +16,5 @@ public:
 
     static void removeSeam(ImageData& image, const std::vector<unsigned int>& seam);
     static void paintSeam(ImageData& image, const std::vector<unsigned int>& seam);
+
 };

@@ -16,6 +16,7 @@
 
 #include "ImageData.h"
 #include "CustomImageFilter.h"
+#include "SobelShader.h"
 
 static void glfw_error_callback(int error, const char *description) {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -82,6 +83,9 @@ void sprinkle_red(ImageData &img)
         if (channels > 2) img.getPixelData()[offset + 2] = 0;   // B
     }
 }
+
+
+
 
 int main(int, char **) {
 	// Setup window
@@ -189,10 +193,21 @@ int main(int, char **) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+
+
+	// Create a OpenGL texture identifier
+	GLuint debug_tex;
+	glGenTextures(1, &debug_tex);
+	glBindTexture(GL_TEXTURE_2D, debug_tex);
+
+	// Setup filtering parameters for display
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 	// Load image from file
 	// ----- START HERE -----
 	// 1. load image from disk
-	const std::string img_path = ASSET_PATH "/schmetterling_mid.jpg";
+	const std::string img_path = ASSET_PATH "/test.jpg";
 
 	// 1. load image
 	int img_width = 0, img_height = 0, channels = 0;
@@ -218,8 +233,27 @@ int main(int, char **) {
 	// Initialize seam carved image
 	ImageData seam_carved_image = base_image; // for now just copy original
 
+	seam_carved_image = base_image; // reset image to original
+
+	ImageData greyscale_image = base_image;
+	ImageData sobel_image = base_image;
+	
+	// Convert to greyscale first
+	CustomImageFilter::toGreyscale(base_image, greyscale_image);
+
+	// Initialize GPU Sobel
+	SobelShader mySobelShader = SobelShader();
+
+	int display_w, display_h;
 	// Main loop
 	while (!glfwWindowShouldClose(window)) {
+
+
+		// Restore viewport for ImGui
+		glfwGetFramebufferSize(window, &display_w, &display_h);
+		glViewport(0, 0, display_w, display_h);
+
+		
 		glfwPollEvents();
 
 		// Start the Dear ImGui frame
@@ -252,6 +286,9 @@ int main(int, char **) {
 
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
 									1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			ImGui::Text("Sobel (GPU Shader)");			
+			ImGui::Image((ImTextureID)(intptr_t)debug_tex,
+				ImVec2(seam_carved_image.getWidth(), seam_carved_image.getHeight()));
 			ImGui::End();
 		}
 
@@ -273,19 +310,49 @@ int main(int, char **) {
 			static float target_scale_perc = 100.0f;
 			bool needs_recompute = ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f, 100.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
 
+			unsigned int target_width = static_cast<unsigned int>(base_image.getWidth() * (target_scale_perc / 100.0f));
 			if (needs_recompute) {
 
-				seam_carved_image = base_image; // reset image to original
+				if(target_width < 1) target_width = 1;
+				if(target_width >= seam_carved_image.getWidth()){
+					// reset image to original
+					seam_carved_image = base_image;
+					// --- Sobel Filter Pass ---
+					//CustomImageFilter::sobel(greyscale_image, sobel_image);
+					CustomImageFilter::toGreyscale(seam_carved_image, greyscale_image);
+					sobel_image = mySobelShader.apply(greyscale_image);
 
-				ImageData greyscale = base_image;
-				// Convert to greyscale first
-				CustomImageFilter::toGreyscale(base_image, greyscale);
-				// Apply edge detection with sobel
-				CustomImageFilter::sobel(greyscale, seam_carved_image);
+				}
 
-				ImageData sobelY_result = greyscale;
-				CustomImageFilter::sobelY(greyscale, sobelY_result);
-				primitive_resized_image = sobelY_result;
+				while (seam_carved_image.getWidth() > target_width)
+				{
+					sobel_image = mySobelShader.apply(greyscale_image);
+
+					/* code */
+					std::vector<unsigned int> minimalEnergyPathMap = CustomImageFilter::computeMinimalEnergyPathMap(sobel_image);
+					
+	
+					std::vector<unsigned int> seam = CustomImageFilter::identityMinEnergySeam(minimalEnergyPathMap, sobel_image.getWidth(), sobel_image.getHeight());
+	
+					CustomImageFilter::removeSeam(seam_carved_image, seam);
+					CustomImageFilter::removeSeam(greyscale_image, seam);
+				}
+				
+				
+				// Upload pixels into debug texture
+				glBindTexture(GL_TEXTURE_2D, debug_tex);
+				glTexImage2D(GL_TEXTURE_2D, 0,
+							get_format_from_channels(sobel_image.getChannels()),
+							sobel_image.getWidth(),
+							sobel_image.getHeight(),
+							0,
+							get_format_from_channels(sobel_image.getChannels()),
+							GL_UNSIGNED_BYTE,
+							sobel_image.getPixelData());
+
+				// ImageData sobelY_result = greyscale;
+				// CustomImageFilter::sobelY(greyscale, sobelY_result);
+				// primitive_resized_image = sobelY_result;
 
 				// for (int i = 0; i < (int)((100.0-target_scale_perc)/10); i++)
 				// {
@@ -314,7 +381,7 @@ int main(int, char **) {
 							get_format_from_channels(seam_carved_image.getChannels()),
 							GL_UNSIGNED_BYTE,
 							seam_carved_image.getPixelData());
-
+			
 			ImGui::Text("Processed (Seam Carved)");
 			ImGui::Image((ImTextureID)(intptr_t)seam_carved_image_id,
 			             ImVec2(seam_carved_image.getWidth(), seam_carved_image.getHeight()));
@@ -369,3 +436,6 @@ int main(int, char **) {
 
 	return 0;
 }
+
+
+

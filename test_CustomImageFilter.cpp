@@ -2,9 +2,6 @@
 #include "CustomImageFilter.h"
 #include "ImageData.h"
 
-// TODO not nice
-const unsigned int GL_RED = 1;
-
 // 5x5 image with a vertical edge in the center
 std::vector<unsigned char> monochrom_vertical_edge_img5x5 = {
     0,   0, 10, 0,  0,

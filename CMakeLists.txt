@@ -28,7 +28,8 @@ set(libraries ${libraries} fmt::fmt)
 ## Create main executable
 add_executable(Flink-Home
 				${CMAKE_SOURCE_DIR}/main.cpp
-				${CMAKE_SOURCE_DIR}/CustomImageFilter.cpp)
+				${CMAKE_SOURCE_DIR}/CustomImageFilter.cpp
+				${CMAKE_SOURCE_DIR}/SobelShader.cpp)
 
 target_include_directories(
 	Flink-Home
@@ -50,6 +51,7 @@ enable_testing()
 add_executable(test_CustomImageFilter
 	${CMAKE_SOURCE_DIR}/test_CustomImageFilter.cpp
 	${CMAKE_SOURCE_DIR}/CustomImageFilter.cpp
+	${CMAKE_SOURCE_DIR}/SobelShader.cpp
 )
 
 target_link_libraries(test_CustomImageFilter PRIVATE GTest::gtest GTest::gtest_main)
