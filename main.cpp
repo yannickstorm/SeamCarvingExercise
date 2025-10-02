@@ -17,6 +17,8 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <cmath>
+#include <cfloat>
 
 #include "ImageData.h"
 #include "CustomImageFilter.h"
@@ -29,6 +31,7 @@ struct SeamCarveJobState {
 	std::atomic<bool> is_busy{false};
 	std::atomic<bool> result_available{false};
 	std::atomic<bool> stop_request{false};
+	std::atomic<unsigned int> progress_percent{100}; // 0..100 progress of current task
 	std::mutex mtx; // protects result and sobel_result
 	std::condition_variable cv;
 	ImageData result;
@@ -59,11 +62,12 @@ static void seamCarveWorker(const ImageData &base_image, SeamCarveJobState &job)
 		// Prepare working copies (fresh start each request)
 		ImageData seam_carved = base_image;
 		ImageData greyscale_image = CustomImageFilter::toGreyscale(seam_carved);
+		const unsigned int original_width = seam_carved.getWidth();
 
 		// Release lock during heavy processing (only needed for publishing results)
 		lk.unlock();
 
-		ImageData sobel_image;
+		ImageData sobel_image = greyscale_image; // To prevent empty image in case of no carving
 		// 2. Seam removal loop until desired width or stop
 		while (!job.stop_request.load() && seam_carved.getWidth() > target) {
 			// If user moves the slider, adapt target without restarting
@@ -82,6 +86,13 @@ static void seamCarveWorker(const ImageData &base_image, SeamCarveJobState &job)
 			// (d) Remove seam from working + greyscale versions
 			CustomImageFilter::removeSeam(seam_carved, seam);
 			CustomImageFilter::removeSeam(greyscale_image, seam);
+
+			// Update progress
+			if ((original_width - target) != 0) {
+				unsigned int completion_percentage = (original_width - seam_carved.getWidth()) * 100u / (original_width - target);
+				if (completion_percentage > 100u) completion_percentage = 100u;
+				job.progress_percent.store(completion_percentage);
+			}
 		}
 
 		// Publish result (lock to prevent race conditions)
@@ -89,10 +100,26 @@ static void seamCarveWorker(const ImageData &base_image, SeamCarveJobState &job)
 		job.result       = seam_carved;
 		job.sobel_result = sobel_image;
 		job.result_available.store(true);
+		job.progress_percent.store(100);
 		
 		// Mark worker idle after finishing current request
 		job.is_busy.store(false);
 	}
+}
+
+// Draw some int value as text in the center of image
+static void DrawTextOverlay(const ImVec2& image_pos, const ImVec2& image_size, unsigned int value) {
+	ImVec2 center(image_pos.x + image_size.x * 0.5f, image_pos.y + image_size.y * 0.5f);
+
+	// Percentage text
+	std::string value_text = fmt::format("{}%", value);
+	ImFont* font = ImGui::GetFont();
+	float big_size = font->FontSize * 2.4f;
+	ImVec2 text_size = font->CalcTextSizeA(big_size, FLT_MAX, 0.0f, value_text.c_str());
+	ImVec2 text_pos(center.x - text_size.x * 0.5f, center.y - text_size.y * 0.5f);
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	ImU32 color  = IM_COL32(255,0,255,255);
+	draw_list->AddText(font, big_size, text_pos, color, value_text.c_str());
 }
 
 // load image
@@ -332,6 +359,7 @@ int main(int, char **) {
 				job.target_image_width.store(target_width);
 				// Set a compute request
 				job.compute_request.store(true);
+				job.progress_percent.store(0);
 				// Notify the thread that it can check for task to do
 				job.cv.notify_one();
 			}
@@ -354,8 +382,15 @@ int main(int, char **) {
 			// Upload pixels into texture
 			load_ImageData_to_GLTexture(seam_carved_image, seam_carved_image_id);
 			ImGui::Text("Processed (Seam Carved)");
-			ImGui::Image((ImTextureID)(intptr_t)seam_carved_image_id,
-						 ImVec2(seam_carved_image.getWidth(), seam_carved_image.getHeight()));
+			// Record position to overlay process progress if busy
+			ImVec2 image_pos = ImGui::GetCursorScreenPos();
+			ImVec2 image_size((float)seam_carved_image.getWidth(), (float)seam_carved_image.getHeight());
+			ImGui::Image((ImTextureID)(intptr_t)seam_carved_image_id, image_size);
+
+
+			if (job.is_busy.load()) {
+				DrawTextOverlay(image_pos, image_size, job.progress_percent.load());
+			}
 
 			// 9. Display resized image (for now just display original image)
 			load_ImageData_to_GLTexture(primitive_resized_image, primitive_resized_image_id);
