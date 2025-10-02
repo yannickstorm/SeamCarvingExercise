@@ -1,6 +1,13 @@
+// SobelShader.cpp
+// GPU implementation of a grayscale Sobel magnitude pass.
+// Notes / Caveats:
+//   * No shader compile/link error checking yet (could add glGetShaderiv / glGetProgramiv).
+//   * Input assumed already grayscale if channels==1; otherwise only the .r
+//     channel is sampled (implicit conversion by taking .r)
 #include "SobelShader.h"
 #include <vector>
 
+// Simple passthrough vertex shader.
 const char* SobelShader::vertSrc() {
     return R"(#version 130
 in vec2 aPos;
@@ -12,6 +19,9 @@ void main(){
 })";
 }
 
+// Fragment shader: hard-coded 3x3 Sobel kernels in X and Y; magnitude output.
+// Could be extended with edge handling modes (currently samples with default
+// texture wrap, set to CLAMP_TO_EDGE in texture setup).
 const char* SobelShader::fragSrc() {
     return R"(#version 130
 uniform sampler2D u_image;
@@ -42,12 +52,14 @@ void main(){
 }
 
 SobelShader::SobelShader(){
+    // Local lambda to compile a shader stage (NO error logging yet).
     auto compile = [](GLenum type, const char* src){
         GLuint s = glCreateShader(type);
         glShaderSource(s,1,&src,nullptr);
         glCompileShader(s);
         return s;
     };
+    // Compile + link program
     GLuint vs = compile(GL_VERTEX_SHADER, vertSrc());
     GLuint fs = compile(GL_FRAGMENT_SHADER, fragSrc());
     sobel_prog = glCreateProgram();
@@ -58,6 +70,7 @@ SobelShader::SobelShader(){
     glLinkProgram(sobel_prog);
     glDeleteShader(vs); glDeleteShader(fs);
 
+    // Input texture (source image)
     glGenTextures(1,&sobel_input_tex_id);
     glBindTexture(GL_TEXTURE_2D,sobel_input_tex_id);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -65,6 +78,7 @@ SobelShader::SobelShader(){
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
 
+    // Output texture (render target) — allocated lazily again in apply().
     glGenTextures(1,&sobel_output_tex);
     glBindTexture(GL_TEXTURE_2D, sobel_output_tex);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -81,8 +95,10 @@ SobelShader::~SobelShader(){
     if(sobel_prog) glDeleteProgram(sobel_prog);
     if(sobel_fbo) glDeleteFramebuffers(1,&sobel_fbo);
     if(sobel_input_tex_id) glDeleteTextures(1,&sobel_input_tex_id);
+    if(sobel_output_tex) glDeleteTextures(1,&sobel_output_tex); // prevent leak
 }
 
+// Lazy-create and draw a fullscreen triangle strip (two triangles).
 void SobelShader::renderFullscreenQuad(){
     if(quadVAO==0){
         float quadVertices[] = {
@@ -131,5 +147,6 @@ ImageData SobelShader::apply(const ImageData& image){
     glPixelStorei(GL_PACK_ALIGNMENT,1);
     glReadPixels(0,0,image.getWidth(),image.getHeight(),GL_RED,GL_UNSIGNED_BYTE,result.getPixelData());
     glBindFramebuffer(GL_FRAMEBUFFER,0);
+    // Return single-channel magnitude image.
     return result;
 }

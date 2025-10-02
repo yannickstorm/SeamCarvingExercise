@@ -118,7 +118,7 @@ static void DrawTextOverlay(const ImVec2& image_pos, const ImVec2& image_size, u
 	ImVec2 text_size = font->CalcTextSizeA(big_size, FLT_MAX, 0.0f, value_text.c_str());
 	ImVec2 text_pos(center.x - text_size.x * 0.5f, center.y - text_size.y * 0.5f);
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
-	ImU32 color  = IM_COL32(255,0,255,255);
+	ImU32 color = ImGui::GetColorU32(ImGuiCol_SliderGrabActive); // Set color to the same as the slider
 	draw_list->AddText(font, big_size, text_pos, color, value_text.c_str());
 }
 
