@@ -36,8 +36,6 @@ vcpkg_subbuild/
 
 # IDE files
 *.code-workspace
-.vscode/
-.idea/
 *.swp
 *.swo
 *.bak

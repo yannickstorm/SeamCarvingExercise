@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Main Application (Flink-Home)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Flink-Home",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                { "description": "Enable pretty-printing for gdb", "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ],
+            "preLaunchTask": "CMake: build"
+        },
+        {
+            "name": "Debug GoogleTest (test_CustomImageFilter)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/gtests/test_CustomImageFilter",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                { "description": "Enable pretty-printing for gdb", "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ],
+            "preLaunchTask": "CMake: build"
+        }
+    ]
+}
