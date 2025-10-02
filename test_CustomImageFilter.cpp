@@ -51,8 +51,7 @@ TEST(CustomImageFilterTest, SobelY) {
     truth.setPixels(monochrom_hor_edge_sobelY_img5x5.data(), monochrom_hor_edge_sobelY_img5x5.size());
 
     // Apply sobel filter on output image
-    ImageData output(5, 5, 1);
-    CustomImageFilter::sobelY(input, output);
+    ImageData output = CustomImageFilter::sobelY(input);
 
     output.printPixels();
 
@@ -65,7 +64,7 @@ TEST(CustomImageFilterTest, SobelY) {
     input.setPixels(monochrom_vertical_edge_img5x5.data(), monochrom_vertical_edge_img5x5.size());
 
     // Apply sobel filter on output image
-    CustomImageFilter::sobelY(input, output);
+   output = CustomImageFilter::sobelY(input);
 
     // Check that output is zero everywhere (no horizontal edges)
     for (size_t i = 0; i < output.getPixelCount(); ++i) {
@@ -84,8 +83,7 @@ TEST(CustomImageFilterTest, SobelX) {
     truth.setPixels(monochrom_vertical_edge_sobelX_img5x5.data(), monochrom_vertical_edge_sobelX_img5x5.size());
 
     // Apply sobel filter on output image
-    ImageData output(5, 5, 1);
-    CustomImageFilter::sobelX(input, output);
+    ImageData output = CustomImageFilter::sobelX(input);
 
     output.printPixels();
 
@@ -98,7 +96,7 @@ TEST(CustomImageFilterTest, SobelX) {
     input.setPixels(monochrom_hor_edge_img5x5.data(), monochrom_hor_edge_img5x5.size());
 
     // Apply sobel filter on output image
-    CustomImageFilter::sobelX(input, output);
+    output = CustomImageFilter::sobelX(input);
 
     // Check that output is zero everywhere (no horizontal edges)
     for (size_t i = 0; i < output.getPixelCount(); ++i) {

@@ -18,14 +18,11 @@ std::vector<int> sobelGy = {
 };
 
 
-void convolution(const ImageData& input, ImageData& output, const std::vector<int>& kernel) {
-    output.setWidth(input.getWidth());
-    output.setHeight(input.getHeight());
-    output.setChannels(input.getChannels());
+ImageData convolution(const ImageData& input, const std::vector<int>& kernel) {
+    ImageData output(input.getWidth(), input.getHeight(), input.getChannels());
 
     unsigned int height = input.getHeight();
     unsigned int width = input.getWidth();
-
 
     for (int y = 0; y < input.getHeight(); ++y) {
         for (int x = 0; x < input.getWidth(); ++x) {
@@ -54,30 +51,32 @@ void convolution(const ImageData& input, ImageData& output, const std::vector<in
             output.pixels[y * width + x] = static_cast<unsigned char>(convol_res);
         }
     }
+
+    return output;
 }
 
-void CustomImageFilter::sobelX(const ImageData& input, ImageData& output) {
+ImageData CustomImageFilter::sobelX(const ImageData& input) {
     if(input.getChannels() != 1) {
         spdlog::error("SobelX filter only supports single channel images.");
-        return;
+        return ImageData();
     }
-    convolution(input, output, sobelGx);
+    return convolution(input, sobelGx);
 
 }
 
-void CustomImageFilter::sobelY(const ImageData& input, ImageData& output) {
+ImageData CustomImageFilter::sobelY(const ImageData& input) {
     if(input.getChannels() != 1) {
         spdlog::error("SobelY filter only supports single channel images.");
-        return;
+        return ImageData();
     }
-     convolution(input, output, sobelGy);
+    return convolution(input, sobelGy);
 
 }
 
 // Convert input image to greyscale
-void CustomImageFilter::toGreyscale(const ImageData& input, ImageData& output) {
+ImageData CustomImageFilter::toGreyscale(const ImageData& input) {
     // Ensure output is sized and formatted correctly
-    output = ImageData(input.getWidth(), input.getHeight(), 1);
+    ImageData output(input.getWidth(), input.getHeight(), 1);
 
     auto inIt = input.pixels.begin();
     auto outIt = output.pixels.begin();
@@ -87,27 +86,28 @@ void CustomImageFilter::toGreyscale(const ImageData& input, ImageData& output) {
         inIt += input.getChannels();
         ++outIt;
     }
+
+    return output;
 }
 
 // Combined Sobel filter (magnitude of both directions)
-void CustomImageFilter::sobel(const ImageData& input, ImageData& output) {
+ImageData CustomImageFilter::sobel(const ImageData& input) {
     if(input.getChannels() != 1) {
         spdlog::error("Sobel filter only supports single channel images.");
-        return;
+        return ImageData();
     }
 
-    ImageData gradX, gradY;
-    sobelX(input, gradX);
-    sobelY(input, gradY);
+    ImageData output(input.getWidth(), input.getHeight(), 1);
 
-    output.setWidth(input.getWidth());
-    output.setHeight(input.getHeight());
-    output.setChannels(1);
+    ImageData gradX = CustomImageFilter::sobelX(input);
+    ImageData gradY = CustomImageFilter::sobelY(input);
 
     for (size_t i = 0; i < output.pixels.size(); ++i) {
         int magnitude = static_cast<int>(std::sqrt(gradX.pixels[i] * gradX.pixels[i] + gradY.pixels[i] * gradY.pixels[i]));
         output.pixels[i] = static_cast<unsigned char>(std::clamp(magnitude, 0, 255));
     }
+
+    return output;
 }
 
 // Compute the minimal energy path map using dynamic programming

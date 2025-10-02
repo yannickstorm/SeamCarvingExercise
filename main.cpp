@@ -235,11 +235,10 @@ int main(int, char **) {
 
 	seam_carved_image = base_image; // reset image to original
 
-	ImageData greyscale_image = base_image;
 	ImageData sobel_image = base_image;
 	
 	// Convert to greyscale first
-	CustomImageFilter::toGreyscale(base_image, greyscale_image);
+	ImageData greyscale_image = CustomImageFilter::toGreyscale(base_image);
 
 	// Initialize GPU Sobel
 	SobelShader mySobelShader = SobelShader();
@@ -318,14 +317,17 @@ int main(int, char **) {
 					// reset image to original
 					seam_carved_image = base_image;
 					// --- Sobel Filter Pass ---
-					//CustomImageFilter::sobel(greyscale_image, sobel_image);
-					CustomImageFilter::toGreyscale(seam_carved_image, greyscale_image);
+					greyscale_image = CustomImageFilter::toGreyscale(seam_carved_image);
+
+					//sobel_image = CustomImageFilter::sobel(greyscale_image);
 					sobel_image = mySobelShader.apply(greyscale_image);
 
 				}
 
+				// reduce image width using seam carving until target width is reached
 				while (seam_carved_image.getWidth() > target_width)
 				{
+					//sobel_image = CustomImageFilter::sobel(greyscale_image);
 					sobel_image = mySobelShader.apply(greyscale_image);
 
 					/* code */
