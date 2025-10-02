@@ -1,6 +1,8 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <glad/glad.h>
+#include <spdlog/spdlog.h>
 
 class ImageData {
 private:
@@ -21,6 +23,19 @@ public:
     unsigned int getWidth() const { return width; }
     unsigned int getHeight() const { return height; }
     unsigned int getChannels() const { return channels; }
+
+    // Return an OpenGL pixel format enum corresponding to the channel count.
+    GLenum getGLFormat() const {
+        switch (channels) {
+            case 1: return GL_RED;
+            case 2: return GL_RG;
+            case 3: return GL_RGB;
+            case 4: return GL_RGBA;
+            default:
+                spdlog::error("Unsupported number of channels: {}", channels);
+                return 0; // invalid
+        }
+    }
 
     void setWidth(unsigned int w) {
         width = w;

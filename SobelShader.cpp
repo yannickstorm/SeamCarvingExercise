@@ -110,12 +110,12 @@ void SobelShader::renderFullscreenQuad(){
 ImageData SobelShader::apply(const ImageData& image){
     glGenTextures(1,&sobel_output_tex);
     glBindTexture(GL_TEXTURE_2D,sobel_output_tex);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_RED,image.getWidth(),image.getHeight(),0,GL_RED,GL_UNSIGNED_BYTE,nullptr);
+    glTexImage2D(GL_TEXTURE_2D,0,image.getGLFormat(),image.getWidth(),image.getHeight(),0,image.getGLFormat(),GL_UNSIGNED_BYTE,nullptr);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 
     glBindTexture(GL_TEXTURE_2D,sobel_input_tex_id);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_RED,image.getWidth(),image.getHeight(),0,GL_RED,GL_UNSIGNED_BYTE,image.getPixelData());
+    glTexImage2D(GL_TEXTURE_2D,0,image.getGLFormat(),image.getWidth(),image.getHeight(),0,image.getGLFormat(),GL_UNSIGNED_BYTE,image.getPixelData());
 
     glBindFramebuffer(GL_FRAMEBUFFER,sobel_fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,sobel_output_tex,0);
