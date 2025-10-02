@@ -13,13 +13,86 @@
 
 #include <string>
 #include <random>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 #include "ImageData.h"
 #include "CustomImageFilter.h"
 #include "SobelShader.h"
 
-static void glfw_error_callback(int error, const char *description) {
-	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+// Seam carving background job state + worker (extracted from main)
+struct SeamCarveJobState {
+	std::atomic<unsigned int> target_image_width{0};
+	std::atomic<bool> compute_request{false};
+	std::atomic<bool> is_busy{false};
+	std::atomic<bool> result_available{false};
+	std::atomic<bool> stop_request{false};
+	std::mutex mtx; // protects result and sobel_result
+	std::condition_variable cv;
+	ImageData result;
+	ImageData sobel_result;
+};
+
+// Worker thread entry point.
+// Repeatedly waits for a carving request, then performs:
+//  1. Reset working copy and compute initial greyscale.
+//  2. Iteratively compute energy (Sobel), DP minimal energy map, seam, and remove it.
+//  3. Adapts to slider changes mid-process by re-reading target width.
+//  4. Publishes the final carved image + last Sobel energy when target reached.
+// Notes:
+//  - Starts from the original image each request (stateless approach keeps logic simple).
+//  - Thread-safe publication guarded by mutex; atomics signal availability/state.
+static void seamCarveWorker(const ImageData &base_image, SeamCarveJobState &job) {
+	while (!job.stop_request.load()) {
+		// 1. Wait until there's a new request (or stop signaled)
+		std::unique_lock<std::mutex> lk(job.mtx);
+		job.cv.wait(lk, [&]() { return job.compute_request.load() || job.stop_request.load(); });
+		if (job.stop_request.load()) break; // graceful shutdown
+
+		// Capture current target & transition to working state
+		unsigned int target = job.target_image_width.load();
+		job.compute_request.store(false);
+		job.is_busy.store(true);
+
+		// Prepare working copies (fresh start each request)
+		ImageData seam_carved = base_image;
+		ImageData greyscale_image = CustomImageFilter::toGreyscale(seam_carved);
+
+		// Release lock during heavy processing (only needed for publishing results)
+		lk.unlock();
+
+		ImageData sobel_image;
+		// 2. Seam removal loop until desired width or stop
+		while (!job.stop_request.load() && seam_carved.getWidth() > target) {
+			// If user moves the slider, adapt target without restarting
+			unsigned int latestTarget = job.target_image_width.load();
+			if (latestTarget != target) target = latestTarget;
+
+			// (a) Compute contrast image with Sobel
+			sobel_image = CustomImageFilter::sobel(greyscale_image);
+
+			// (b) Dynamic programming minimal energy path map
+			std::vector<unsigned int> minimalEnergyPathMap = CustomImageFilter::computeMinimalEnergyPathMap(sobel_image);
+
+			// (c) Extract minimal energy seam
+			std::vector<unsigned int> seam = CustomImageFilter::identityMinEnergySeam( minimalEnergyPathMap, sobel_image.getWidth(), sobel_image.getHeight());
+
+			// (d) Remove seam from working + greyscale versions
+			CustomImageFilter::removeSeam(seam_carved, seam);
+			CustomImageFilter::removeSeam(greyscale_image, seam);
+		}
+
+		// Publish result (lock to prevent race conditions)
+		std::lock_guard<std::mutex> lk2(job.mtx);
+		job.result       = seam_carved;
+		job.sobel_result = sobel_image;
+		job.result_available.store(true);
+		
+		// Mark worker idle after finishing current request
+		job.is_busy.store(false);
+	}
 }
 
 // load image
@@ -52,7 +125,6 @@ void load_ImageData_to_GLTexture(const ImageData &image, GLuint texture_id) {
 
 int main(int, char **) {
 	// Setup window
-	glfwSetErrorCallback(glfw_error_callback);
 	if (!glfwInit())
 		return 1;
 
@@ -181,12 +253,17 @@ int main(int, char **) {
 	ImageData primitive_resized_image = base_image; // for now just copy original
 	// Initialize seam carved image
 	ImageData seam_carved_image = base_image; // for now just copy original
-	ImageData sobel_image = base_image;
-	// Convert to greyscale first
-	ImageData greyscale_image = CustomImageFilter::toGreyscale(base_image);
+	ImageData sobel_image = base_image; // energy visualization
 
-	// Initialize GPU Sobel
-	SobelShader mySobelShader = SobelShader();
+	// Background job state for seam carving
+	SeamCarveJobState job;
+
+	job.result = base_image;
+	job.sobel_result = sobel_image;
+	job.target_image_width = base_image.getWidth();
+
+	// Launch worker thread
+	std::thread worker(seamCarveWorker, std::cref(base_image), std::ref(job));
 
 	int display_w, display_h;
 	// Main loop
@@ -222,15 +299,10 @@ int main(int, char **) {
 		// to create a named window.
 		{
 			ImGui::Begin("Settings");
-			ImGui::Text("Configure the App below."); // Display some text (you can use
-																							 // a format strings too)
-			ImGui::Checkbox(
-					"Demo Window",
-					&show_demo_window); // Edit bools storing our window open/close state
-
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-									1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-			ImGui::Text("Sobel (GPU Shader)");			
+			ImGui::Text("Configure the App below.");
+			ImGui::Checkbox("Demo Window", &show_demo_window);
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			ImGui::Text("Seam Carving: %s", job.is_busy.load() ? "Working" : "Idle");
 			ImGui::Image((ImTextureID)(intptr_t)debug_tex,
 				ImVec2(seam_carved_image.getWidth(), seam_carved_image.getHeight()));
 			ImGui::End();
@@ -249,92 +321,47 @@ int main(int, char **) {
 			ImGui::Text("Original");
 			ImGui::Image((ImTextureID)(intptr_t)original_image_text_id, ImVec2(img_width, img_height));
 
-			// Toggle to show/hide energy (Sobel) map
-			static bool use_sobel_shader = false;
-			ImGui::Checkbox("Use Sobel Shader", &use_sobel_shader);
-
-			// 4. add a simple imgui slider here to scale image from 0 to 100%
+			// Slider to trigger an image width reduction
 			static float target_scale_perc = 100.0f;
-			bool needs_recompute = ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f, 100.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
-
-			//compute target width of the seam carved image
+			bool slider_changed = ImGui::SliderFloat("Scale Image By", &target_scale_perc, 10.0f, 100.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
 			unsigned int target_width = static_cast<unsigned int>(base_image.getWidth() * (target_scale_perc / 100.0f));
 
-			// If slider changed, recompute seam carving
-			if (needs_recompute) {
+			if (slider_changed) {
+				if (target_width < 1) target_width = 1;
+				// Set parameter for the Seam Carving thread
+				job.target_image_width.store(target_width);
+				// Set a compute request
+				job.compute_request.store(true);
+				// Notify the thread that it can check for task to do
+				job.cv.notify_one();
+			}
 
-				if(target_width < 1) target_width = 1;
-				if(target_width >= seam_carved_image.getWidth()){
-					// reset image to original
-					seam_carved_image = base_image;
-					// --- Sobel Filter Pass ---
-					greyscale_image = CustomImageFilter::toGreyscale(seam_carved_image);
-
-					//sobel_image = CustomImageFilter::sobel(greyscale_image);
-					if (use_sobel_shader)
-						sobel_image = mySobelShader.apply(greyscale_image);
-					else
-						sobel_image = CustomImageFilter::sobel(greyscale_image);
-					
-				}
-
-				// reduce image width using seam carving until target width is reached
-				while (seam_carved_image.getWidth() > target_width)
-				{
-					if (use_sobel_shader)
-						sobel_image = mySobelShader.apply(greyscale_image);
-					else
-						sobel_image = CustomImageFilter::sobel(greyscale_image);
-
-					/* code */
-					std::vector<unsigned int> minimalEnergyPathMap = CustomImageFilter::computeMinimalEnergyPathMap(sobel_image);
-					
-	
-					std::vector<unsigned int> seam = CustomImageFilter::identityMinEnergySeam(minimalEnergyPathMap, sobel_image.getWidth(), sobel_image.getHeight());
-	
-					CustomImageFilter::removeSeam(seam_carved_image, seam);
-					CustomImageFilter::removeSeam(greyscale_image, seam);
-				}
-				
-				
-				// Upload pixels into debug texture
+			// Check if the processing thread has finished working on the picture.
+			// Pull the results if finished.
+			if (job.result_available.load()) {
+				//Require the lock to prevent race conditions.
+				std::lock_guard<std::mutex> lk(job.mtx);
+				// Copy data result
+				seam_carved_image = job.result;
+				sobel_image = job.sobel_result;
+				// Reset flag
+				job.result_available.store(false);
+				// Update debug texture
 				load_ImageData_to_GLTexture(sobel_image, debug_tex);
-
-				// ImageData sobelY_result = greyscale;
-				// CustomImageFilter::sobelY(greyscale, sobelY_result);
-				// primitive_resized_image = sobelY_result;
-
-				// for (int i = 0; i < (int)((100.0-target_scale_perc)/10); i++)
-				// {
-				// 	sprinkle_red(seam_carved_image);
-				// }
-
-				// 5. Compute image energy
-				// auto orig_energy =  calculate_energy(pixels, img_w, img_h, img_chan);
-				// 6. find low energy seams
-				// auto approx_seams = find_low_energy_seam(orig_energy, img_w, img_h);
-
-				// 7. now remove seems to reduce image size
-
-				// 8. Primitive rescaling using for example bilinear interpolation
-				// (horizontal only)
 			}
 
 			// Display seam carved image (for now just display original image)
 			// Upload pixels into texture
 			load_ImageData_to_GLTexture(seam_carved_image, seam_carved_image_id);
-			
 			ImGui::Text("Processed (Seam Carved)");
 			ImGui::Image((ImTextureID)(intptr_t)seam_carved_image_id,
-			             ImVec2(seam_carved_image.getWidth(), seam_carved_image.getHeight()));
+						 ImVec2(seam_carved_image.getWidth(), seam_carved_image.getHeight()));
 
 			// 9. Display resized image (for now just display original image)
-			// ImGui::Text("Resized");
 			load_ImageData_to_GLTexture(primitive_resized_image, primitive_resized_image_id);
-
 			ImGui::Text("Primitive Resized");
 			ImGui::Image((ImTextureID)(intptr_t)primitive_resized_image_id,
-			             ImVec2(primitive_resized_image.getWidth(), primitive_resized_image.getHeight()));
+						 ImVec2(primitive_resized_image.getWidth(), primitive_resized_image.getHeight()));
 
 			ImGui::End();
 
@@ -364,6 +391,11 @@ int main(int, char **) {
 
 		glfwSwapBuffers(window);
 	}
+
+	// Signal worker to stop and join
+	job.stop_request.store(true);
+	job.cv.notify_one();
+	if (worker.joinable()) worker.join();
 
 	// Cleanup
 	// TODO glDeleteTextures(1, &image1_tex_id);
